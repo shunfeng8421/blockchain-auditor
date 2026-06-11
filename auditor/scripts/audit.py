@@ -136,9 +136,9 @@ def scan_hardcoded_secrets(filepath):
     
     # Private key patterns (hex)
     pk_patterns = [
-        r"(?:private[_\s]*key|secret[_\s]*key|mnemonic|seed[_\s]*phrase)\s*[:=]\s*["'']?\s*(0x[a-fA-F0-9]{64})",
-        r"(?:PRIVATE_KEY|SECRET_KEY|MNEMONIC|INFURA_KEY|ALCHEMY_KEY)\s*=\s*["'']([^"'']{32,})["'']",
-        r"(0x)?[a-fA-F0-9]{64}",  # Raw 64-char hex
+        r"(?:private[_\s]*key|secret[_\s]*key|mnemonic|seed[_\s]*phrase)\s*[:=]\s*[\"\x27]?\s*(0x[a-fA-F0-9]{64})",
+        r"(?:PRIVATE_KEY|SECRET_KEY|MNEMONIC|INFURA_KEY|ALCHEMY_KEY)\s*=\s*[\"\x27]([^\"\x27]{32,})[\"\x27]",
+        r"\b(0x)?[a-fA-F0-9]{64}\b",  # Raw 64-char hex
     ]
     
     for pattern in pk_patterns:
