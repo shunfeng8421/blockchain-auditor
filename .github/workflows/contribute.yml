@@ -5,7 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       finding_id:
-        description: "Finding ID to fix"
+        description: "Finding ID to fix (e.g. BLK-GO-002)"
+        required: true
+      repo_url:
+        description: "Target repo URL (e.g. https://github.com/ethereum/go-ethereum)"
         required: true
 
 permissions:
@@ -34,7 +37,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TARGET=$(python -c "import json; print(json.load(open('finding.json'))['repo_url'])")
+          TARGET="${{ github.event.inputs.repo_url }}"
           gh repo fork "$TARGET" --clone --remote
       - name: Apply fix
         run: |
