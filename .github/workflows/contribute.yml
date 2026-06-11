@@ -1,20 +1,19 @@
-name: "Contribute Fix to Blockchain Repo"
+name: "Contribute Fix Suggestion"
 on:
   issues:
     types: [labeled]
   workflow_dispatch:
     inputs:
       finding_id:
-        description: "Finding ID to fix (e.g. BLK-GO-002)"
+        description: "Finding rule ID (e.g. BLK-GO-002)"
         required: true
       repo_url:
-        description: "Target repo URL (e.g. https://github.com/ethereum/go-ethereum)"
+        description: "Target repo URL"
         required: true
 
 permissions:
   contents: write
   issues: write
-  pull-requests: write
 
 jobs:
   contribute:
@@ -28,47 +27,32 @@ jobs:
       - name: Install tools
         run: pip install requests pyyaml
       - name: Load finding
-        id: finding
         run: |
-          python auditor/scripts/load_finding.py \
-            --label "${{ github.event.label.name }}" \
-            --output finding.json
-      - name: Fork target repo
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          python auditor/scripts/load_finding.py             --finding-id "${{ github.event.inputs.finding_id }}"             --repo-url "${{ github.event.inputs.repo_url }}"             --output finding.json
+          cat finding.json
+      - name: Generate fix suggestion
         run: |
-          TARGET="${{ github.event.inputs.repo_url }}"
-          gh repo fork "$TARGET" --clone --remote
-      - name: Apply fix
-        run: |
-          cd $(python -c "import json; print(json.load(open('finding.json'))['repo_name'])")
-          python ../auditor/scripts/apply_fix.py --finding ../finding.json --rules ../auditor/rules/blockchain-audit-rules.txt
-      - name: Create PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd $(python -c "import json; print(json.load(open('finding.json'))['repo_name'])")
-          BRANCH="fix/blockchain-auditor-${ github.run_number }"
-          git checkout -b "$BRANCH"
-          git add -A
-          git diff --staged --quiet || (
-            git commit -m "[bot] fix: ${{ steps.finding.outputs.title }}" &&
-            git push origin "$BRANCH" &&
-            gh pr create \
-              --base main \
-              --head "$BRANCH" \
-              --title "[Audit Bot] Fix: ${{ steps.finding.outputs.title }}" \
-              --body "Automated fix from blockchain-auditor bot. See finding details in audit report."
-          )
+          python auditor/scripts/apply_fix.py             --finding finding.json             --rules auditor/rules/blockchain-audit-rules.txt             --output FIX_SUGGESTION.md
+          cat FIX_SUGGESTION.md >> $GITHUB_STEP_SUMMARY
+      - name: Post suggestion to issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const suggestion = fs.readFileSync("FIX_SUGGESTION.md", "utf8");
+            const issue_number = 3;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue_number,
+              body: suggestion
+            });
       - name: Update tracking
         run: |
-          python auditor/scripts/update_pr_tracking.py \
-            --finding finding.json \
-            --status "submitted" \
-            --log auditor/logs/events.jsonl
-      - name: Commit tracking update
+          python auditor/scripts/update_pr_tracking.py             --finding finding.json             --status "suggested"             --log auditor/logs/events.jsonl
+      - name: Commit tracking
         run: |
           git config user.name "blockchain-auditor[bot]"
           git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
           git add auditor/logs/
-          git diff --staged --quiet || (git commit -m "[bot] contribute: PR submitted" && git push)
+          git diff --staged --quiet || (git commit -m "[bot] contribute: fix suggestion" && git push)
