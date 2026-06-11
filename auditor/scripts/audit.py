@@ -134,11 +134,16 @@ def scan_hardcoded_secrets(filepath):
     except Exception:
         return findings
     
-    # Private key patterns (hex)
+    # Private key patterns (focused - avoid false positives in blockchain repos)
     pk_patterns = [
-        r"(?:private[_\s]*key|secret[_\s]*key|mnemonic|seed[_\s]*phrase)\s*[:=]\s*[\"\x27]?\s*(0x[a-fA-F0-9]{64})",
-        r"(?:PRIVATE_KEY|SECRET_KEY|MNEMONIC|INFURA_KEY|ALCHEMY_KEY)\s*=\s*[\"\x27]([^\"\x27]{32,})[\"\x27]",
-        r"\b(0x)?[a-fA-F0-9]{64}\b",  # Raw 64-char hex
+        # Explicit key assignment with hex value (most reliable)
+        r"(?:private[_\s]*key|secret[_\s]*key)\s*[:=]\s*[\"\x27]?\s*(0x[a-fA-F0-9]{64})",
+        # Env-style secrets with non-empty values
+        r"(?:PRIVATE_KEY|SECRET_KEY|MNEMONIC|INFURA_KEY|ALCHEMY_KEY)\s*=\s*[\"\x27]([^\"\x27\s]{32,})[\"\x27]",
+        # Mnemonic phrases (12+ words in quotes)
+        r"(?:mnemonic|seed[_\s]*phrase)\s*[:=]\s*[\"\x27]([a-z]+\s+){11,}[a-z]+[\"\x27]",
+        # .env files with non-placeholder values (not "your_key_here")
+        r"(?:KEY|SECRET|PASSWORD|TOKEN)\s*=\s*[\"\x27](?!your_|example_|test_|change_|placeholder)([^\"\x27]{8,})[\"\x27]",
     ]
     
     for pattern in pk_patterns:
@@ -196,6 +201,11 @@ def main():
         if any(filepath.endswith(ext) for ext in [".env", ".env.example", ".yml", ".yaml", ".toml", ".json", ".py", ".js", ".ts", ".go", ".rs", ".sol"]):
             secrets = scan_hardcoded_secrets(filepath)
             all_findings.extend(secrets)
+    
+    # Limit total findings to prevent overflow
+    MAX_FINDINGS = 500
+    if len(all_findings) > MAX_FINDINGS * 2:
+        all_findings = all_findings[:MAX_FINDINGS * 2]
     
     # Deduplicate and sort
     seen = set()
