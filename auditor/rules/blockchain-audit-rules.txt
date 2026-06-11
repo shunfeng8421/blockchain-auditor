@@ -1,0 +1,513 @@
+# ============================================================
+# Blockchain Audit Rules v1.0
+# SWC = Smart Contract Weakness Classification (EIP-1470)
+# CWE = Common Weakness Enumeration mapping
+# ============================================================
+
+## === Solidity / EVM Rules ===
+
+rule_id: BLK-SOL-001
+name: "Reentrancy Attack"
+severity: critical
+category: security
+swc_id: SWC-107
+cwe_id: CWE-841
+tags: [solidity, evm, reentrancy, defi]
+detection:
+  methods:
+    - "External call before state update"
+    - "Missing ReentrancyGuard or checks-effects-interactions pattern"
+    - "transfer/send replaced with call{value:}() without protection"
+  patterns:
+    - "call\s*\{.*value:\s*.*\}\(.*\)"
+    - "No modifier and cross-function reentrancy path exists"
+confidence: high
+severity_weight: 100
+fix:
+  1. Use OpenZeppelin ReentrancyGuard
+  2. Follow checks-effects-interactions pattern
+  3. Prefer transfer() (2300 gas) over call{value:}()
+known_exploits:
+  - "The DAO (2016, $60M)"
+  - "Cream Finance (2021, $130M)"
+  - "Curve/Vyper reentrancy (2023, $70M)"
+
+---
+
+rule_id: BLK-SOL-002
+name: "Integer Overflow/Underflow"
+severity: high
+category: security
+swc_id: SWC-101
+cwe_id: CWE-682
+tags: [solidity, evm, arithmetic]
+detection:
+  methods:
+    - "Solidity < 0.8.0 unchecked arithmetic"
+    - "unchecked {} block arithmetic"
+    - "Missing SafeMath with compiler < 0.8.0"
+  patterns:
+    - "pragma solidity \^?0\.[4-7]\.\d+"
+    - "\bunchecked\s*\{"
+confidence: high
+severity_weight: 70
+fix:
+  1. Upgrade to Solidity >= 0.8.0 (built-in overflow check)
+  2. Or use OpenZeppelin SafeMath
+  3. Add explicit bounds check in unchecked blocks
+known_exploits:
+  - "BeautyChain (BEC) overflow (2018)"
+  - "PoWH Coin underflow (2018)"
+
+---
+
+rule_id: BLK-SOL-003
+name: "Missing Access Control"
+severity: critical
+category: security
+swc_id: SWC-105
+cwe_id: CWE-284
+tags: [solidity, evm, access-control]
+detection:
+  methods:
+    - "Critical functions missing onlyOwner/onlyRole modifier"
+    - "Sensitive functions with public visibility"
+    - "Ownable not inherited or not used"
+    - "initialize function without initializer modifier"
+  patterns:
+    - "function (withdraw|setOwner|setAdmin|mint|burn|initialize)\s*\(.*\)\s*public"
+confidence: high
+severity_weight: 100
+fix:
+  1. Inherit OpenZeppelin Ownable/AccessControl
+  2. Add onlyOwner/onlyRole to critical functions
+  3. Use initializer modifier to prevent re-initialization
+known_exploits:
+  - "Parity Multisig (2017, $150M)"
+  - "Wormhole uninitialized (2022, $326M potential)"
+
+---
+
+rule_id: BLK-SOL-004
+name: "Oracle Manipulation"
+severity: high
+category: security
+swc_id: SWC-120
+cwe_id: CWE-841
+tags: [solidity, defi, oracle, price-manipulation]
+detection:
+  methods:
+    - "Using spot price from DEX pair as oracle"
+    - "Missing TWAP (Time-Weighted Average Price)"
+    - "Single price source without redundancy"
+  patterns:
+    - "getReserves\(\)"
+    - "balanceOf.*price|price.*balanceOf"
+confidence: medium
+severity_weight: 60
+fix:
+  1. Use Chainlink decentralized oracle
+  2. Implement TWAP mechanism
+  3. Multi-source aggregation + deviation detection
+known_exploits:
+  - "Cream Finance oracle attack (2021, $130M)"
+  - "Inverse Finance (2022, $15M)"
+
+---
+
+rule_id: BLK-SOL-005
+name: "Flash Loan Attack Vector"
+severity: high
+category: security
+swc_id: SWC-999
+tags: [solidity, defi, flash-loan, economic-exploit]
+detection:
+  methods:
+    - "Financial operations with state manipulable in single tx"
+    - "Mint/borrow/liquidate logic depends on manipulable vars"
+    - "No single-block price deviation protection"
+  patterns:
+    - "borrow/liquidate completable in one tx: price->borrow->liquidate"
+confidence: medium
+severity_weight: 60
+fix:
+  1. Add minDelay timelock to critical operations
+  2. Implement TWAP price + max deviation check
+  3. Add slippage protection to liquidation/mint
+known_exploits:
+  - "bZx flash loan (2020, $1M)"
+  - "PancakeBunny (2021, $200M)"
+  - "Beanstalk Farms (2022, $182M)"
+
+---
+
+rule_id: BLK-SOL-006
+name: "Frontrunning / Sandwich Attack"
+severity: medium
+category: security
+swc_id: SWC-114
+cwe_id: CWE-841
+tags: [solidity, defi, mev]
+detection:
+  methods:
+    - "Swap function missing slippage parameter"
+    - "amountOutMin = 0 or missing minimum check"
+    - "No deadline or deadline too long"
+  patterns:
+    - "amountOutMin|amountMin.*=.*0"
+confidence: medium
+severity_weight: 40
+fix:
+  1. All trade functions must accept amountOutMin parameter
+  2. Set reasonable deadline (typically 20 minutes)
+  3. Consider commit-reveal scheme
+known_exploits:
+  - "Uniswap general sandwich attacks (ongoing)"
+
+---
+
+rule_id: BLK-SOL-007
+name: "Weak Randomness"
+severity: high
+category: security
+swc_id: SWC-120
+cwe_id: CWE-330
+tags: [solidity, randomness, gaming, nft]
+detection:
+  methods:
+    - "Using block.timestamp/blockhash/block.difficulty as randomness"
+    - "On-chain randomness generation (miner can manipulate)"
+  patterns:
+    - "block\.(timestamp|hash|difficulty|number|coinbase).*random"
+    - "keccak256.*block\.(timestamp|hash)"
+confidence: high
+severity_weight: 70
+fix:
+  1. Use Chainlink VRF for verifiable randomness
+  2. Or use commit-reveal scheme
+known_exploits:
+  - "Multiple NFT projects rarity manipulated by miners"
+
+---
+
+rule_id: BLK-SOL-008
+name: "Unchecked External Call Return"
+severity: high
+category: security
+swc_id: SWC-104
+cwe_id: CWE-252
+tags: [solidity, evm, low-level-call]
+detection:
+  methods:
+    - "Low-level call/delegatecall/staticcall unchecked return"
+    - "send() return value not checked"
+  patterns:
+    - "\.(call|delegatecall|send)\s*\{"
+    - "Missing require(success, ...) or if(!success) revert()"
+confidence: high
+severity_weight: 70
+fix:
+  1. Always check low-level call return values
+  2. require(success, "call failed")
+  3. Or use transfer() (auto-revert) instead of send()
+
+---
+
+rule_id: BLK-SOL-009
+name: "DoS with Block Gas Limit"
+severity: medium
+category: security
+swc_id: SWC-128
+cwe_id: CWE-400
+tags: [solidity, evm, dos, gas]
+detection:
+  methods:
+    - "Unbounded for loop over dynamically growing array"
+    - "External calls inside loops (may exhaust gas)"
+  patterns:
+    - "for\s*\(.*\.length"
+    - "for.*push|push.*for"
+confidence: medium
+severity_weight: 40
+fix:
+  1. Set reasonable loop upper bound
+  2. Use pull-over-push pattern
+  3. Replace array with mapping + counter
+
+---
+
+rule_id: BLK-SOL-010
+name: "Unsafe Delegatecall"
+severity: critical
+category: security
+swc_id: SWC-112
+cwe_id: CWE-829
+tags: [solidity, evm, proxy, upgradeable]
+detection:
+  methods:
+    - "delegatecall target address user-controllable"
+    - "Proxy implementation address modifiable without access control"
+  patterns:
+    - "\.delegatecall\(.*user|msg\.sender"
+    - "delegatecall.*address.*storage"
+confidence: critical
+severity_weight: 100
+fix:
+  1. delegatecall target must be hardcoded or under strict access control
+  2. Use OpenZeppelin standard proxy patterns (UUPS/Transparent)
+known_exploits:
+  - "Parity Multisig (2017, $150M)"
+
+---
+
+rule_id: BLK-SOL-011
+name: "Signature Replay Attack"
+severity: high
+category: security
+swc_id: SWC-121
+cwe_id: CWE-345
+tags: [solidity, eip712, signature, meta-tx]
+detection:
+  methods:
+    - "EIP-712 signature missing nonce or deadline"
+    - "Signature replayable cross-chain (missing chainId)"
+  patterns:
+    - "ecrecover|ECDSA\.recover"
+    - "digest does not include nonce/chainId/address(this)"
+confidence: high
+severity_weight: 70
+fix:
+  1. Implement complete EIP-712 typed data signatures
+  2. digest must include chainId, address(this), nonce, deadline
+known_exploits:
+  - "Polygon cross-chain replay attacks"
+
+---
+
+rule_id: BLK-SOL-012
+name: "Timestamp Dependence"
+severity: medium
+category: security
+swc_id: SWC-116
+cwe_id: CWE-829
+tags: [solidity, evm, timestamp]
+detection:
+  methods:
+    - "Critical logic using block.timestamp for precise timing"
+    - "Randomness/reward depends on block.timestamp"
+  patterns:
+    - "block\.timestamp\s*[<>=]"
+confidence: low
+severity_weight: 25
+fix:
+  1. block.timestamp only for coarse (> 30s) judgments
+  2. Precise timing use block.number
+
+---
+
+## === Rust / Solana / Polkadot Rules ===
+
+rule_id: BLK-RST-001
+name: "Missing Account Validation"
+severity: critical
+category: security
+tags: [rust, solana, anchor, account-validation]
+detection:
+  methods:
+    - "AccountInfo.owner not checked"
+    - "Anchor #[account(...)] constraints insufficient"
+    - "Missing signer check (owner/signer not verified)"
+  patterns:
+    - "AccountInfo.*owner.*!=|AccountInfo.*owner.*ne"
+confidence: high
+severity_weight: 100
+fix:
+  1. Anchor: use #[account(owner = program_id)] constraint
+  2. Native: manually check AccountInfo.owner == program_id
+known_exploits:
+  - "Multiple Solana programs drained due to missing owner check"
+
+---
+
+rule_id: BLK-RST-002
+name: "Unchecked CPI Return"
+severity: high
+category: security
+tags: [rust, solana, cpi, cross-program]
+detection:
+  methods:
+    - "invoke/invoke_signed return value not checked"
+    - "CPI call failure silently ignored"
+  patterns:
+    - "invoke\(.*\)\s*;\s*$"
+    - "invoke_signed\(.*\)\s*;\s*$"
+confidence: medium
+severity_weight: 60
+fix:
+  1. Always check CPI call results: invoke(...)? or .unwrap()
+  2. Critical CPI failures should revert entire tx
+
+---
+
+rule_id: BLK-RST-003
+name: "Bump Seed Mismatch"
+severity: high
+category: security
+tags: [rust, solana, pda, anchor]
+detection:
+  methods:
+    - "PDA bump seed hardcoded instead of retrieved from chain"
+    - "Stored bump inconsistent with actual derive"
+  patterns:
+    - "find_program_address.*bump|bump\s*=\s*\d+"
+confidence: medium
+severity_weight: 60
+fix:
+  1. Store bump in PDA accounts field
+  2. Read bump from account during CPI, dont hardcode
+
+---
+
+rule_id: BLK-RST-004
+name: "Arithmetic Overflow (Rust)"
+severity: medium
+category: security
+tags: [rust, solana, near, arithmetic]
+detection:
+  methods:
+    - "Using +, -, *, / instead of checked_/saturating_"
+    - "Overflow risk in release mode"
+    - "Type cast truncation (as conversion)"
+  patterns:
+    - "as\s+(u\d+|i\d+)\b"
+confidence: medium
+severity_weight: 40
+fix:
+  1. Use checked_add/sub/mul, saturating_add etc.
+  2. Type conversion use try_from() instead of as
+
+---
+
+## === Go / Cosmos / Ethereum Client Rules ===
+
+rule_id: BLK-GO-001
+name: "Consensus Critical Logic Without Test Coverage"
+severity: high
+category: quality
+tags: [go, cosmos, consensus, testing]
+detection:
+  methods:
+    - "consensus/validator module missing unit tests"
+    - "State transition functions untested"
+  patterns:
+    - "consensus|validator|state.*\.go missing _test.go"
+confidence: medium
+severity_weight: 50
+fix:
+  1. All consensus-related functions must have tests
+  2. Use table-driven tests
+  3. Add fuzz testing for boundary conditions
+
+---
+
+rule_id: BLK-GO-002
+name: "Insecure Randomness (Go)"
+severity: high
+category: security
+tags: [go, cosmos, randomness, crypto]
+detection:
+  methods:
+    - "Using math/rand instead of crypto/rand"
+    - "Key generation using non-crypto random source"
+  patterns:
+    - "math/rand\.(Int|Float|Read)"
+    - "rand\.New\(.*time\.Now|rand\.Seed"
+confidence: high
+severity_weight: 70
+fix:
+  1. Crypto usage must use crypto/rand
+  2. Use standard library ecdsa/ed25519 for key generation
+
+---
+
+rule_id: BLK-GO-003
+name: "Unsafe Concurrent State Access"
+severity: high
+category: security
+tags: [go, cosmos, concurrency, race]
+detection:
+  methods:
+    - "Shared state without sync.Mutex/RWMutex"
+    - "Map shared between goroutines without sync"
+  patterns:
+    - "go func.*map\[|go func.*\w+\s*="
+confidence: medium
+severity_weight: 50
+fix:
+  1. Use sync.Mutex/RWMutex for shared state
+  2. Enable go test -race in CI
+
+---
+
+## === Universal Crypto Rules ===
+
+rule_id: BLK-CRYPTO-001
+name: "Hardcoded Private Keys / Secrets"
+severity: critical
+category: security
+tags: [all, secrets, key-management]
+detection:
+  methods:
+    - "Source code contains private keys/mnemonics/API keys"
+    - "Config files contain unencrypted keys"
+  patterns:
+    - "(private_key|mnemonic|secret_key|api_key)\s*=\s*[\"\\''']\w+[\"\\''']"
+    - "0x[a-fA-F0-9]{64}"
+confidence: critical
+severity_weight: 100
+fix:
+  1. Use environment variables or key management service
+  2. .env file in .gitignore
+  3. Private keys/mnemonics never hardcoded
+
+---
+
+rule_id: BLK-CRYPTO-002
+name: "Vulnerable Dependencies"
+severity: high
+category: security
+tags: [all, supply-chain, dependencies]
+detection:
+  methods:
+    - "package.json/Cargo.toml/go.mod has deps with known CVEs"
+    - "Dependencies >1 year outdated"
+  patterns:
+    - "Detected via npm audit / cargo audit / go vulncheck"
+confidence: medium
+severity_weight: 50
+fix:
+  1. Regular dependency vulnerability scans (CI integration)
+  2. Use Dependabot/Renovate for auto-updates
+  3. Minimize dependency count
+
+---
+
+rule_id: BLK-CRYPTO-003
+name: "Non-standard Token Implementation"
+severity: high
+category: security
+tags: [solidity, erc20, erc721, token]
+detection:
+  methods:
+    - "ERC20 transfer does not return bool"
+    - "ERC20 approve missing safety check"
+    - "ERC721 safeTransferFrom not implemented correctly"
+  patterns:
+    - "function transfer\(.*\).*returns\s*\(bool"
+    - "approve.*spender.*amount.*\{"
+confidence: medium
+severity_weight: 50
+fix:
+  1. Use OpenZeppelin standard implementations
+  2. transfer must return bool
+  3. approve must zero-out before setting new value

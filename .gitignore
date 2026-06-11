@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Generated reports
+auditor/logs/*.json
+auditor/logs/daily_report_*.md
+auditor/logs/audit_report.md
+auditor/logs/pr_status.jsonl
+
+# Temp
+_*.py

@@ -1,0 +1,49 @@
+name: "Daily Audit Report"
+on:
+  schedule:
+    - cron: "0 22 * * *"  # Daily 22:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install requests pyyaml
+      - name: Generate daily report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python auditor/scripts/daily_report.py \
+            --events auditor/logs/events.jsonl \
+            --findings auditor/findings/ \
+            --tracking auditor/logs/pr_status.jsonl \
+            --output auditor/logs/daily_report_{{ date }}.md
+      - name: Generate summary JSON
+        run: |
+          python auditor/scripts/summary_stats.py \
+            --events auditor/logs/events.jsonl \
+            --output auditor/logs/summary.json
+      - name: Commit report
+        run: |
+          git config user.name "blockchain-auditor[bot]"
+          git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
+          git add auditor/logs/
+          git diff --staged --quiet || (git commit -m "[bot] daily-report: {{ date }}" && git push)
+      - name: Create daily issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SUMMARY=$(python -c "import json; d=json.load(open('auditor/logs/summary.json')); print(f'Repos: {d["total_repos_audited"]} | Findings: {d["total_findings"]} | PRs: {d["prs_merged"]} merged / {d["prs_tracked"]} tracked | Rules adopted: {d["rules_adopted"]}')")
+          gh issue create \
+            --title "[Daily Report] {{ date }}" \
+            --body "## Daily Audit Report - {{ date }}\n\n$SUMMARY\n\nSee full report: auditor/logs/daily_report_{{ date }}.md" \
+            --label "daily-report"

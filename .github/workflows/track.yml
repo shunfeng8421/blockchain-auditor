@@ -1,0 +1,42 @@
+name: "Track PR Status"
+on:
+  schedule:
+    - cron: "0 */4 * * *"  # Every 4 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install requests pyyaml
+      - name: Check PR statuses
+        id: track
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python auditor/scripts/track_prs.py \
+            --tracking auditor/logs/pr_tracking.jsonl \
+            --output auditor/logs/pr_status.jsonl \
+            --log auditor/logs/events.jsonl
+      - name: Commit tracking update
+        run: |
+          git config user.name "blockchain-auditor[bot]"
+          git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
+          git add auditor/logs/
+          git diff --staged --quiet || (git commit -m "[bot] track: PR status update #${ github.run_number }" && git push)
+      - name: Auto-label case-study-ready
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python auditor/scripts/auto_label_merged.py \
+            --tracking auditor/logs/pr_status.jsonl \
+            --label "case-study-ready"

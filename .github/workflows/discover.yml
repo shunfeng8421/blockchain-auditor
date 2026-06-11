@@ -1,0 +1,47 @@
+name: "Discover Blockchain Repos"
+on:
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  actions: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      new_repos: ${{ steps.discover.outputs.new_repos }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests pyyaml
+      - name: Discover repos
+        id: discover
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python auditor/scripts/discover.py             --min-stars 50             --languages "Solidity,Rust,Go,TypeScript,Move"             --topics "blockchain,cryptocurrency,smart-contracts,defi,web3,solana,cosmos,ethereum,bitcoin"             --max-repos 100             --output auditor/logs/discovered_repos.jsonl             --state auditor/logs/discover_state.json
+      - name: Commit results
+        run: |
+          git config user.name "blockchain-auditor[bot]"
+          git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
+          git add auditor/logs/
+          git diff --staged --quiet || (git commit -m "[bot] discover: new blockchain repos" && git push)
+      - name: Notify
+        if: steps.discover.outputs.new_repos > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const count = ${{ steps.discover.outputs.new_repos }};
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Discover] ${count} new blockchain repos ready`,
+              body: `Add \`audit-ready\` label to start scanning.`,
+              labels: ["discover"]
+            });

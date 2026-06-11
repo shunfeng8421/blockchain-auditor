@@ -1,0 +1,71 @@
+name: "Contribute Fix to Blockchain Repo"
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      finding_id:
+        description: "Finding ID to fix"
+        required: true
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  contribute:
+    if: github.event.label.name == "contribute-approved" || github.event_name == "workflow_dispatch"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: pip install requests pyyaml
+      - name: Load finding
+        id: finding
+        run: |
+          python auditor/scripts/load_finding.py \
+            --label "${{ github.event.label.name }}" \
+            --output finding.json
+      - name: Fork target repo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TARGET=$(python -c "import json; print(json.load(open('finding.json'))['repo_url'])")
+          gh repo fork "$TARGET" --clone --remote
+      - name: Apply fix
+        run: |
+          cd $(python -c "import json; print(json.load(open('finding.json'))['repo_name'])")
+          python ../auditor/scripts/apply_fix.py --finding ../finding.json --rules ../auditor/rules/blockchain-audit-rules.txt
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd $(python -c "import json; print(json.load(open('finding.json'))['repo_name'])")
+          BRANCH="fix/blockchain-auditor-${ github.run_number }"
+          git checkout -b "$BRANCH"
+          git add -A
+          git diff --staged --quiet || (
+            git commit -m "[bot] fix: ${{ steps.finding.outputs.title }}" &&
+            git push origin "$BRANCH" &&
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "[Audit Bot] Fix: ${{ steps.finding.outputs.title }}" \
+              --body "Automated fix from blockchain-auditor bot. See finding details in audit report."
+          )
+      - name: Update tracking
+        run: |
+          python auditor/scripts/update_pr_tracking.py \
+            --finding finding.json \
+            --status "submitted" \
+            --log auditor/logs/events.jsonl
+      - name: Commit tracking update
+        run: |
+          git config user.name "blockchain-auditor[bot]"
+          git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
+          git add auditor/logs/
+          git diff --staged --quiet || (git commit -m "[bot] contribute: PR submitted" && git push)

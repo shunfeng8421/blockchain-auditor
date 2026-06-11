@@ -1,0 +1,56 @@
+name: "Generate Case Study"
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  case_study:
+    if: github.event.label.name == "case-study-ready" || github.event_name == "workflow_dispatch"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Gather evidence
+        run: |
+          python auditor/scripts/gather_evidence.py \
+            --finding auditor/findings/ \
+            --output auditor/case-studies/
+      - name: Draft case study
+        run: |
+          python auditor/scripts/draft_case_study.py \
+            --evidence auditor/case-studies/ \
+            --rules auditor/rules/blockchain-audit-rules.txt \
+            --output auditor/case-studies/draft.md
+      - name: Polish with AI
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python auditor/scripts/polish_case_study.py \
+            --draft auditor/case-studies/draft.md \
+            --output auditor/case-studies/final.md
+      - name: Commit case study
+        run: |
+          git config user.name "blockchain-auditor[bot]"
+          git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
+          git add auditor/case-studies/
+          git diff --staged --quiet || (git commit -m "[bot] case-study: new case study" && git push)
+      - name: Post to issue
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const content = fs.readFileSync("auditor/case-studies/final.md", "utf8");
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ github.event.issue.number }},
+              body: content.substring(0, 60000)
+            });

@@ -1,0 +1,82 @@
+name: "Audit Blockchain Repo"
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: "Repo URL to audit"
+        required: true
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  audit:
+    if: github.event.label.name == "audit-ready" || github.event_name == "workflow_dispatch"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: |
+          pip install requests pyyaml slither-analyzer 2>/dev/null || pip install requests pyyaml
+          npm install -g @graphql-inspector/cli 2>/dev/null || true
+          which cargo && cargo install cargo-audit 2>/dev/null || true
+      - name: Determine target repo
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "url=${{ github.event.inputs.repo_url }}" >> ${GITHUB_OUTPUT}
+          else
+            ISSUE_BODY="${{ github.event.issue.body }}"
+            REPO_URL=$(echo "$ISSUE_BODY" | grep -oP 'https://github\.com/[\w.-]+/[\w.-]+' | head -1)
+            echo "url=${REPO_URL}" >> ${GITHUB_OUTPUT}
+          fi
+      - name: Clone target repo
+        run: git clone --depth 1 ${{ steps.target.outputs.url }} /tmp/target_repo
+      - name: Run Slither (Solidity)
+        run: |
+          find /tmp/target_repo -name '*.sol' | head -1 | xargs -I{} dirname {} | sort -u | while read d; do
+            slither "$d" --json "${GITHUB_WORKSPACE}/auditor/logs/slither.json" 2>/dev/null || true
+          done
+      - name: Run cargo-audit (Rust)
+        run: |
+          if [ -f /tmp/target_repo/Cargo.toml ]; then
+            cd /tmp/target_repo && cargo audit --json > "${GITHUB_WORKSPACE}/auditor/logs/cargo_audit.json" 2>/dev/null || true
+          fi
+      - name: Run govulncheck (Go)
+        run: |
+          if [ -f /tmp/target_repo/go.mod ]; then
+            go install golang.org/x/vuln/cmd/govulncheck@latest 2>/dev/null || true
+            cd /tmp/target_repo && govulncheck -json ./... > "${GITHUB_WORKSPACE}/auditor/logs/govulncheck.json" 2>/dev/null || true
+          fi
+      - name: Run custom rule-based audit
+        run: python auditor/scripts/audit.py --target /tmp/target_repo --rules auditor/rules/blockchain-audit-rules.txt --output auditor/findings/ --log auditor/logs/events.jsonl
+      - name: Generate report
+        run: python auditor/scripts/report.py --findings auditor/findings/ --output auditor/logs/audit_report.md
+      - name: Commit findings
+        run: |
+          git config user.name "blockchain-auditor[bot]"
+          git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
+          git add auditor/findings/ auditor/logs/
+          git diff --staged --quiet || (git commit -m "[bot] audit: findings" && git push)
+      - name: Post findings comment
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const report = fs.readFileSync("auditor/logs/audit_report.md", "utf8");
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ github.event.issue.number }},
+              body: report.substring(0, 60000)
+            });
