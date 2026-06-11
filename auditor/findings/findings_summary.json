@@ -1,6 +1,6 @@
 {
   "target": "/tmp/target_repo",
-  "timestamp": "2026-06-11T19:28:19.699085Z",
+  "timestamp": "2026-06-11T19:34:18.372739Z",
   "total_files_scanned": 1750,
   "total_findings": 477,
   "by_severity": {
