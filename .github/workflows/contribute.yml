@@ -35,12 +35,24 @@ jobs:
           python auditor/scripts/apply_fix.py             --finding finding.json             --rules auditor/rules/blockchain-audit-rules.txt             --output FIX_SUGGESTION.md
           cat FIX_SUGGESTION.md >> $GITHUB_STEP_SUMMARY
       - name: Post suggestion to issue
+        env:
+          FINDING_ID: ${{ github.event.inputs.finding_id }}
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require("fs");
             const suggestion = fs.readFileSync("FIX_SUGGESTION.md", "utf8");
-            const issue_number = 3;
+            // Find matching issue by title
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "contribute-approved",
+              per_page: 10
+            });
+            const target = issues.find(i => i.title.includes(process.env.FINDING_ID || ""));
+            const issue_number = target ? target.number : 3;
+            console.log(`Posting to issue #${issue_number}`);
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
