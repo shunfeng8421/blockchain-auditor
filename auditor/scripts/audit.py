@@ -222,7 +222,7 @@ def main():
     findings_file = os.path.join(args.output, "findings.jsonl")
     summary_file = os.path.join(args.output, "findings_summary.json")
     
-    with open(findings_file, "a", encoding="utf-8") as f:
+    with open(findings_file, "w", encoding="utf-8") as f:
         for finding in unique:
             f.write(json.dumps(finding, ensure_ascii=False) + "\n")
     
