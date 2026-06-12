@@ -22,6 +22,7 @@ jobs:
         id: track
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python auditor/scripts/track_prs.py \
             --tracking auditor/logs/pr_tracking.jsonl \
@@ -36,6 +37,7 @@ jobs:
       - name: Auto-label case-study-ready
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python auditor/scripts/auto_label_merged.py \
             --tracking auditor/logs/pr_status.jsonl \
