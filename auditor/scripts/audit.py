@@ -219,8 +219,10 @@ def main():
     
     # Write findings
     os.makedirs(args.output, exist_ok=True)
-    findings_file = os.path.join(args.output, "findings.jsonl")
-    summary_file = os.path.join(args.output, "findings_summary.json")
+        repo_name = os.path.basename(args.target.rstrip("/"))
+    findings_file = os.path.join(args.output, f"{repo_name}_findings.jsonl")
+    summary_file = os.path.join(args.output, f"{repo_name}_summary.json")
+    
     
     with open(findings_file, "w", encoding="utf-8") as f:
         for finding in unique:
