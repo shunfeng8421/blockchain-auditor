@@ -1,7 +1,7 @@
 name: "Daily Audit Report"
 on:
   schedule:
-    - cron: "0 22 * * *"  # Daily 22:00 UTC
+    - cron: "0 22 * * *"
   workflow_dispatch:
 
 permissions:
@@ -22,26 +22,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python auditor/scripts/daily_report.py \
-            --events auditor/logs/events.jsonl \
-            --findings auditor/findings/ \
-            --tracking auditor/logs/pr_status.jsonl \
-            --output auditor/logs/daily_report_$(date +%Y-%m-%d).md
+          python auditor/scripts/daily_report.py             --events auditor/logs/events.jsonl             --findings auditor/findings/             --tracking auditor/logs/pr_status.jsonl             --output "auditor/logs/daily_report_$(date +%Y-%m-%d).md"
       - name: Generate summary JSON
-        run: |
-          python auditor/scripts/summary_stats.py \
-            --events auditor/logs/events.jsonl \
-            --output auditor/logs/summary.json
+        run: python auditor/scripts/summary_stats.py --events auditor/logs/events.jsonl --output auditor/logs/summary.json
       - name: Commit report
         run: |
           git config user.name "blockchain-auditor[bot]"
           git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
           git add auditor/logs/
           git diff --staged --quiet || (git pull --rebase origin main && git commit -m "[bot] daily-report: $(date +%Y-%m-%d)" && git push)
-            - name: Create daily issue
+      - name: Create daily issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python auditor/scripts/create_daily_issue.py \
-            --summary auditor/logs/summary.json \
-            --report auditor/logs/daily_report_$(date +%Y-%m-%d).md
+        run: python auditor/scripts/create_daily_issue.py --summary auditor/logs/summary.json --report "auditor/logs/daily_report_$(date +%Y-%m-%d).md"
