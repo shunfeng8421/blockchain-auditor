@@ -1,0 +1,18 @@
+{
+  "target": "web3/web3.js",
+  "timestamp": "2026-06-12T16:08:30.654622+00:00",
+  "total_files_scanned": 1299,
+  "total_findings": 46,
+  "by_severity": {
+    "critical": 38,
+    "high": 8,
+    "medium": 0,
+    "low": 0
+  },
+  "by_language": {
+    "typescript": 46,
+    "config": 0
+  },
+  "audit_method": "automated_pattern_scan (filtered: test files excluded)",
+  "notes": "web3.js v4 library. Production findings only (excluded tests). 803 raw -> filtered to production-relevant."
+}

@@ -665,3 +665,287 @@ fix:
 known_exploits:
   - "3AC-style over-leverage collapse"
   - "Luna/UST death spiral from uncapped exposure"
+
+## === TypeScript / JavaScript Web3 Frontend Rules ===
+
+rule_id: BLK-TS-001
+name: "Private Key / Mnemonic / Seed Storage in Browser"
+severity: critical
+category: security
+tags: [typescript, javascript, web3, wallet, key-management]
+detection:
+  methods:
+    - "localStorage.setItem with private key or mnemonic"
+    - "sessionStorage storing seed phrases"
+    - "IndexedDB with unencrypted keys"
+    - "window.* variable holding private key"
+  patterns:
+    - "localStorage\.setItem\([\"'](?:privateKey|mnemonic|seed|secret|key)[\"']"
+    - "sessionStorage\.setItem\([\"'](?:privateKey|mnemonic|seed)"
+    - "window\.(?:ethereum|wallet).*\.privateKey"
+    - "\.secret\s*=.*[\"'][a-fA-F0-9]{64}"
+confidence: critical
+severity_weight: 100
+fix:
+  1. Never store unencrypted private keys in browser storage
+  2. Use WebCrypto API with non-extractable keys
+  3. Push key management to wallet extension (MetaMask, WalletConnect)
+known_exploits:
+  - "Slope Wallet (2022, $4M) - sent mnemonics to Sentry"
+  - "Various wallet drainers exploiting localStorage keys"
+
+---
+rule_id: BLK-TS-002
+name: "Hardcoded RPC Endpoint / API Key in Client Code"
+severity: high
+category: security
+tags: [typescript, javascript, web3, rpc, infura, alchemy]
+detection:
+  methods:
+    - "Infura/Alchemy/Moralis/QuickNode API key in bundled client code"
+    - "RPC URL with embedded key in source"
+    - "process.env.* used but .env committed or bundled"
+  patterns:
+    - "https://(?:mainnet|goerli|sepolia)\.infura\.io/v3/[a-fA-F0-9]{32}"
+    - "https://.*\.alchemy\.com/v2/[a-zA-Z0-9_-]{20,}"
+    - "https://.*\.moralis\.io.*/[a-zA-Z0-9]{20,}"
+    - "INFURA_PROJECT_ID|ALCHEMY_API_KEY|NEXT_PUBLIC_.*KEY"
+confidence: high
+severity_weight: 80
+fix:
+  1. Never expose RPC API keys in client bundles
+  2. Use a backend proxy for RPC calls
+  3. Set environment variable restrictions in bundler (CRA, Next.js, Vite)
+known_exploits:
+  - "BadgerDAO (2021, $120M) - Cloudflare token in frontend"
+
+---
+rule_id: BLK-TS-003
+name: "Missing User Input Validation Before Contract Call"
+severity: high
+category: security
+tags: [typescript, javascript, web3, contract, input-validation]
+detection:
+  methods:
+    - "Sending user input directly to contract without validation"
+    - "Missing address checksum validation (eip55)"
+    - "Amount from user input not sanitized"
+  patterns:
+    - "contract\.\w+\(.*(?:amount|address|to|recipient|tokenId).*\)(?!.*(?:validate|check|verify|sanitize))"
+    - "ethers\.utils\.getAddress\("
+    - "BigNumber\.from\(.*user|BigNumber\.from\(.*input"
+confidence: high
+severity_weight: 75
+fix:
+  1. Always validate and checksum addresses (ethers.utils.getAddress)
+  2. Parse and range-check all numerical inputs
+  3. Use zod/yup validation schemas for user inputs
+known_exploits:
+  - "Various phishing sites sending to attacker addresses"
+
+---
+rule_id: BLK-TS-004
+name: "Unlimited Token Approval (approve max)"
+severity: high
+category: security
+tags: [typescript, javascript, web3, erc20, approve, token-allowance]
+detection:
+  methods:
+    - "ERC20 approve with MaxUint256 without user warning"
+    - "No revoke-approval UI in dApp"
+    - "approve() called without amount limit"
+  patterns:
+    - "approve\(.*(?:MaxUint256|MAX_UINT256|ethers\.constants\.MaxUint256)"
+    - "approve\(.*ethers\.BigNumber\.from\([\"']0x[f]{1,64}"
+confidence: high
+severity_weight: 75
+fix:
+  1. Only approve exact amount needed for the transaction
+  2. If unlimited approval is UX-required, show prominent warning
+  3. Provide one-click revoke UI
+known_exploits:
+  - "Wallet drainers exploit existing unlimited approvals"
+  - "Multichain hack (2022) exploited old approvals"
+
+---
+rule_id: BLK-TS-005
+name: "Insecure Randomness (Math.random for Crypto Operations)"
+severity: critical
+category: security
+tags: [typescript, javascript, web3, randomness, nonce, crypto]
+detection:
+  methods:
+    - "Math.random() used for nonce generation"
+    - "Math.random() used for salt or commitment scheme"
+    - "Random bytes generated without crypto.getRandomValues"
+  patterns:
+    - "Math\.random\(\)\s*.*(?:nonce|salt|random|id|key|secret|commit)"
+    - "Math\.floor\(Math\.random\(\)"
+    - "new Uint8Array.*Math\.random"
+confidence: critical
+severity_weight: 100
+fix:
+  1. Use crypto.getRandomValues() or crypto.randomUUID()
+  2. Use ethers.Wallet.createRandom() for wallets
+  3. For nonces, use sequential counters not random
+known_exploits:
+  - "Trust Wallet iOS weak RNG (2023)"
+  - "Various NFT mint bots exploiting predictable random"
+
+---
+rule_id: BLK-TS-006
+name: "Missing Transaction Receipt Verification"
+severity: high
+category: security
+tags: [typescript, javascript, web3, transaction, confirmation]
+detection:
+  methods:
+    - "sendTransaction without tx.wait() or .confirm()"
+    - "Assuming tx success without checking receipt.status"
+    - "No block confirmations waited before UI update"
+  patterns:
+    - "\.send\(\).*then(?!.*wait|.*confirm|.*receipt)"
+    - "\.sendTransaction\(.*\)(?!.*wait|.*confirm)"
+    - "receipt\.status\s*(?:!==|!=)\s*1"
+confidence: high
+severity_weight: 70
+fix:
+  1. Always tx.wait(1) and check receipt.status === 1
+  2. Wait for sufficient block confirmations for finality
+  3. Handle tx replacement (speed up / cancel) gracefully
+
+---
+rule_id: BLK-TS-007
+name: "Missing Chain ID Validation"
+severity: high
+category: security
+tags: [typescript, javascript, web3, chain-id, replay]
+detection:
+  methods:
+    - "Signing transactions without verifying chainId"
+    - "No EIP-155 replay protection check"
+    - "Missing network mismatch detection"
+  patterns:
+    - "ethers\.Wallet\.sign\(.*(?!.*chainId)"
+    - "signTypedData\(.*(?!.*chainId|verifyingContract)"
+    - "window\.ethereum\.request.*chainId(?!.*===|!==)"
+confidence: high
+severity_weight: 75
+fix:
+  1. Always include and verify chainId in signatures
+  2. Check current chainId matches expected before signing
+  3. Handle network switch gracefully
+known_exploits:
+  - "Cross-chain replay attacks on ETH/ETC post-fork"
+
+---
+rule_id: BLK-TS-008
+name: "Signature Phishing / Uncleared Domain Binding"
+severity: critical
+category: security
+tags: [typescript, javascript, web3, signature, eip712, phishing]
+detection:
+  methods:
+    - "signMessage/signTypedData without domain display to user"
+    - "eth_sign (blind signing) used instead of personal_sign"
+    - "Missing EIP-712 domain separator"
+  patterns:
+    - "eth_sign\([\"'](?!.*0x)"
+    - "signTypedData.*domain.*name\s*:\s*[\"']{0,1}\s*[\"']{0,1}"
+    - "personal_sign\(.*(?!.*(?:warning|preview|review))"
+confidence: critical
+severity_weight: 100
+fix:
+  1. Always use EIP-712 typed data with full domain info
+  2. Never use eth_sign (blind signing)
+  3. Show user exactly what they are signing with human-readable preview
+known_exploits:
+  - "OpenSea signature phishing (2022)"
+  - "Seaport order phishing attacks (2023)"
+
+---
+rule_id: BLK-TS-009
+name: "Environment Variable Leakage in Client Bundle"
+severity: medium
+category: security
+tags: [typescript, javascript, web3, env, leak, bundle]
+detection:
+  methods:
+    - "NEXT_PUBLIC_ or REACT_APP_ prefixed keys with sensitive data"
+    - ".env committed to git with real values"
+    - "VITE_ prefixed secrets in production bundle"
+  patterns:
+    - "(?:NEXT_PUBLIC_|REACT_APP_|VITE_)(?:SECRET|KEY|MNEMONIC|PASSWORD|PRIVATE_KEY)"
+    - "process\.env\.(?:SECRET|KEY|PRIVATE_KEY|MNEMONIC)"
+confidence: medium
+severity_weight: 50
+fix:
+  1. Never prefix sensitive env vars with NEXT_PUBLIC_/REACT_APP_/VITE_
+  2. Use runtime injection or backend proxy for secrets
+  3. Audit client bundle for leaked env vars
+
+---
+rule_id: BLK-TS-010
+name: "Unsafe Contract Instance Creation"
+severity: medium
+category: security
+tags: [typescript, javascript, web3, contract, address]
+detection:
+  methods:
+    - "Contract address from user input without validation"
+    - "Hardcoded contract address deploy (missing Ownable/admin check)"
+    - "Missing ABI validation"
+  patterns:
+    - "new ethers\.Contract\(.*(?!getAddress|isAddress|checksum)"
+    - "new web3\.eth\.Contract\(.*user|.*input|.*param"
+confidence: medium
+severity_weight: 45
+fix:
+  1. Validate and checksum all contract addresses
+  2. Maintain allowlist of known contract addresses
+  3. Never instantiate contracts from untrusted user input
+
+---
+rule_id: BLK-TS-011
+name: "Missing Slippage Protection in UI"
+severity: high
+category: security
+tags: [typescript, javascript, web3, defi, mev, sandwich]
+detection:
+  methods:
+    - "Swap function with amountOutMin=0 or undefined"
+    - "Missing deadline parameter in swap tx"
+    - "No max-slippage UI exposed to user"
+  patterns:
+    - "amountOutMin\s*:\s*0"
+    - "deadline\s*:\s*.*\+\s*60\s*\*\s*60"
+    - "swapExact.*\(.*(?!.*amountOutMin|slippage|deadline)"
+confidence: high
+severity_weight: 70
+fix:
+  1. Always require amountOutMin with user-configurable default
+  2. Set reasonable deadline (10-20 minutes not 1 hour+)
+  3. Show slippage estimate prominently in UI
+known_exploits:
+  - "Sandwich attacks on DEX swaps without slippage"
+
+---
+rule_id: BLK-TS-012
+name: "Missing Event Listener Cleanup / Memory Leak"
+severity: low
+category: quality
+tags: [typescript, javascript, web3, events, memory]
+detection:
+  methods:
+    - "ethers contract.on without corresponding .off in cleanup"
+    - "WebSocket subscription without unsubscribe on unmount"
+    - "React useEffect with event listener but no return cleanup"
+  patterns:
+    - "\.on\([\"']\w+[\"']\s*,.*\)(?!.*\.off|.*removeListener|.*cleanup)"
+    - "useEffect\(.*=>.*\.on\(.*(?!.*return.*off)"
+confidence: low
+severity_weight: 25
+fix:
+  1. Always return cleanup function from useEffect with .off()
+  2. Use AbortController for fetch-based subscriptions
+  3. Monitor memory usage in production
