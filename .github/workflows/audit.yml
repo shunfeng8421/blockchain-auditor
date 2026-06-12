@@ -57,8 +57,14 @@ jobs:
             go install golang.org/x/vuln/cmd/govulncheck@latest 2>/dev/null || true
             cd /tmp/target_repo && govulncheck -json ./... > "${GITHUB_WORKSPACE}/auditor/logs/govulncheck.json" 2>/dev/null || true
           fi
+      - name: Extract repo name
+        id: repo
+        run: |
+          URL="${{ steps.target.outputs.url }}"
+          NAME=$(echo "$URL" | sed 's|https://github.com/||' | sed 's|/$||')
+          echo "name=$NAME" >> $GITHUB_OUTPUT
       - name: Run custom rule-based audit
-        run: python auditor/scripts/audit.py --target /tmp/target_repo --rules auditor/rules/blockchain-audit-rules.txt --output auditor/findings/ --log auditor/logs/events.jsonl
+        run: python auditor/scripts/audit.py --target /tmp/target_repo --repo-name "${{ steps.repo.outputs.name }}" --rules auditor/rules/blockchain-audit-rules.txt --output auditor/findings/ --log auditor/logs/events.jsonl
       - name: Generate report
         run: python auditor/scripts/report.py --findings auditor/findings/ --output auditor/logs/audit_report.md
       - name: Commit findings

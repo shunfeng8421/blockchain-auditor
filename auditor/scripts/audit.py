@@ -167,6 +167,7 @@ def scan_hardcoded_secrets(filepath):
 def main():
     parser = argparse.ArgumentParser(description="Blockchain code auditor")
     parser.add_argument("--target", required=True, help="Target repo directory")
+    parser.add_argument("--repo-name", default="", help="Repository name for output files")
     parser.add_argument("--rules", required=True, help="Rules file path")
     parser.add_argument("--output", default="auditor/findings/", help="Output directory for findings")
     parser.add_argument("--log", default="auditor/logs/events.jsonl", help="Event log path")
@@ -219,9 +220,9 @@ def main():
     
     # Write findings
     os.makedirs(args.output, exist_ok=True)
-    repo_name = os.path.basename(args.target.rstrip("/"))
-    findings_file = os.path.join(args.output, f"{repo_name}_findings.jsonl")
-    summary_file = os.path.join(args.output, f"{repo_name}_summary.json")
+    repo_name = args.repo_name if args.repo_name else os.path.basename(args.target.rstrip("/"))
+    findings_file = os.path.join(args.output, repo_name + "_findings.jsonl")
+    summary_file = os.path.join(args.output, repo_name + "_summary.json")
     
     
     with open(findings_file, "w", encoding="utf-8") as f:
