@@ -65,6 +65,9 @@ jobs:
         run: |
           git config user.name "blockchain-auditor[bot]"
           git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
+          for i in 1 2 3; do
+            git pull --rebase origin main && break || sleep 3
+          done
           git add auditor/findings/ auditor/logs/
           if ! git diff --staged --quiet; then
             git commit -m "[bot] audit: findings"
