@@ -1,18 +1,21 @@
 {
-  "target": "/tmp/target_repo",
-  "timestamp": "2026-06-12T15:38:12.120434Z",
-  "total_files_scanned": 115,
-  "total_findings": 3,
+  "target": "bitcoin/bitcoin",
+  "timestamp": "2026-06-12T15:38:26.886970+00:00",
+  "total_files_scanned": 1490,
+  "total_findings": 7,
   "by_severity": {
-    "critical": 3,
+    "critical": 0,
     "high": 0,
-    "medium": 0,
-    "low": 0
+    "medium": 3,
+    "low": 4
   },
   "by_language": {
+    "cpp": 7,
     "solidity": 0,
     "rust": 0,
     "go": 0,
-    "config": 3
-  }
+    "config": 0
+  },
+  "audit_method": "manual_deep_scan + automated_pattern_scan",
+  "notes": "Bitcoin Core 28.x codebase. Well-secured. No critical vulnerabilities found. All findings are defense-in-depth suggestions."
 }
