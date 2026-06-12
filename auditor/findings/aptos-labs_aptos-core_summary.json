@@ -1,0 +1,18 @@
+{
+  "target": "/tmp/target_repo",
+  "timestamp": "2026-06-12T08:17:11.489967Z",
+  "total_files_scanned": 5422,
+  "total_findings": 1000,
+  "by_severity": {
+    "critical": 221,
+    "high": 3,
+    "medium": 776,
+    "low": 0
+  },
+  "by_language": {
+    "solidity": 0,
+    "rust": 826,
+    "go": 0,
+    "config": 174
+  }
+}
