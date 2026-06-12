@@ -1,0 +1,18 @@
+{
+  "target": "C:\\Users\\Administrator\\seaprotocol",
+  "timestamp": "2026-06-12T16:38:22.297057Z",
+  "total_files_scanned": 29,
+  "total_findings": 22,
+  "by_severity": {
+    "critical": 11,
+    "high": 8,
+    "medium": 3,
+    "low": 0
+  },
+  "by_language": {
+    "solidity": 0,
+    "rust": 0,
+    "go": 0,
+    "config": 5
+  }
+}

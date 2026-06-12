@@ -949,3 +949,410 @@ fix:
   1. Always return cleanup function from useEffect with .off()
   2. Use AbortController for fetch-based subscriptions
   3. Monitor memory usage in production
+
+## === Java / Web3j / Hyperledger Rules ===
+
+rule_id: BLK-JAVA-001
+name: "Java Deserialization Vulnerability"
+severity: critical
+category: security
+tags: [java, web3j, deserialization, rce]
+detection:
+  methods:
+    - "ObjectInputStream.readObject() without validation filter"
+    - "Serializable class without serialVersionUID control"
+    - "Jackson/YAML deserialization with default typing enabled"
+  patterns:
+    - "ObjectInputStream\b(?!.*ObjectInputFilter)"
+    - "enableDefaultTyping\("
+    - "Yaml\(\)\.load\("
+confidence: critical
+severity_weight: 100
+fix:
+  1. Use ObjectInputFilter to whitelist allowed classes
+  2. Never use enableDefaultTyping() without strict type whitelist
+  3. Prefer JSON over Java serialization for RPC
+known_exploits:
+  - "Log4Shell (CVE-2021-44228) - JNDI deserialization"
+  - "Spring4Shell (CVE-2022-22965)"
+
+---
+rule_id: BLK-JAVA-002
+name: "Insecure Random (java.util.Random for Crypto)"
+severity: critical
+category: security
+tags: [java, crypto, randomness, keygen]
+detection:
+  methods:
+    - "new Random() used instead of SecureRandom"
+    - "Math.random() for cryptographic nonces"
+    - "Missing SecureRandom.getInstanceStrong() for key material"
+  patterns:
+    - "new Random\(\s*\)(?!.*SecureRandom)"
+    - "Math\.random\(\s*\)"
+    - "Random\.nextInt\(.*(?:key|nonce|seed|token)"
+confidence: high
+severity_weight: 90
+fix:
+  1. Use SecureRandom.getInstanceStrong() for all crypto
+  2. Use java.security.SecureRandom not java.util.Random
+  3. Seed from OS entropy source
+
+---
+rule_id: BLK-JAVA-003
+name: "Private Key in String (Heap Inspection Risk)"
+severity: medium
+category: security
+tags: [java, crypto, key-management, memory]
+detection:
+  methods:
+    - "ECKey/PrivateKey stored as String instead of byte[]"
+    - "Missing key zeroization after use"
+    - "Key material in toString() output"
+  patterns:
+    - "String\s+\w*(?:privateKey|secretKey|mnemonic|seed)"
+    - "privateKey\.toString\(\)|secret\.getBytes\(\)"
+confidence: medium
+severity_weight: 50
+fix:
+  1. Use byte[] or char[] for key material (mutable, zeroizable)
+  2. Call Arrays.fill(keyBytes, (byte)0) after use
+  3. Override toString() to never print key material
+
+---
+rule_id: BLK-JAVA-004
+name: "Missing SSL/TLS Validation for RPC Endpoint"
+severity: high
+category: security
+tags: [java, web3j, rpc, tls, mitm]
+detection:
+  methods:
+    - "TrustManager that accepts all certificates"
+    - "HostnameVerifier that always returns true"
+    - "OkHttp/HttpUrlConnection without certificate pinning"
+  patterns:
+    - "X509TrustManager.*checkClientTrusted\s*\{\s*\}"
+    - "ALLOW_ALL_HOSTNAME_VERIFIER|trustAllCerts"
+    - "setHostnameVerifier\(.*\(.*\).*true"
+confidence: high
+severity_weight: 70
+fix:
+  1. Use default SSL context (validates chain of trust)
+  2. Implement certificate pinning for known RPC endpoints
+  3. Never trust all certificates in production
+
+---
+rule_id: BLK-JAVA-005
+name: "XXE (XML External Entity) in Config"
+severity: high
+category: security
+tags: [java, xml, xxe, injection]
+detection:
+  methods:
+    - "DocumentBuilderFactory without FEATURE_SECURE_PROCESSING"
+    - "SAXParser without disabling external entities"
+    - "XMLInputFactory without IS_SUPPORTING_EXTERNAL_ENTITIES=false"
+  patterns:
+    - "DocumentBuilderFactory\.newInstance\(\).*parse"
+    - "SAXParser.*parse(?!.*setFeature.*external)"
+    - "XMLInputFactory\.newInstance\(\).*createXMLStreamReader"
+confidence: high
+severity_weight: 70
+fix:
+  1. Set FEATURE_SECURE_PROCESSING to true
+  2. Disable DOCTYPE declarations
+  3. Use XMLConstants.FEATURE_SECURE_PROCESSING
+
+---
+rule_id: BLK-JAVA-006
+name: "Maven/Gradle Dependency with Known CVE"
+severity: medium
+category: security
+tags: [java, supply-chain, dependencies, maven, gradle]
+detection:
+  methods:
+    - "pom.xml with dependency version < 1 year old (stale)"
+    - "build.gradle with +/latest.release version ranges"
+    - "Missing OWASP dependency-check plugin"
+  patterns:
+    - "(?:SNAPSHOT|latest\.release|latest\.integration)"
+    - "dependency-check-maven"
+confidence: medium
+severity_weight: 40
+fix:
+  1. Pin exact dependency versions
+  2. Add OWASP dependency-check-maven plugin
+  3. Use Dependabot/Renovate for automated updates
+
+---
+## === C# / Nethereum / NBitcoin Rules ===
+
+rule_id: BLK-CS-001
+name: "Insecure Random (System.Random for Crypto)"
+severity: critical
+category: security
+tags: [csharp, dotnet, crypto, randomness]
+detection:
+  methods:
+    - "new Random() used instead of RNGCryptoServiceProvider"
+    - "RandomNumberGenerator not used for key material"
+    - "Guid.NewGuid() as entropy source"
+  patterns:
+    - "new Random\(\s*\)(?!.*(?:RNGCryptoServiceProvider|RandomNumberGenerator))"
+    - "Guid\.NewGuid\(\).*key|Guid\.NewGuid\(\).*seed"
+    - "Random\.Next\(.*(?:key|nonce|seed|wallet|private)"
+confidence: critical
+severity_weight: 95
+fix:
+  1. Use RandomNumberGenerator.Create() for all crypto
+  2. Use System.Security.Cryptography.RNGCryptoServiceProvider
+  3. Bitcoin: use NBitcoin.RandomUtils for BIP32 seed generation
+
+---
+rule_id: BLK-CS-002
+name: "Private Key in String (Managed Memory Risk)"
+severity: medium
+category: security
+tags: [csharp, dotnet, key-management, memory]
+detection:
+  methods:
+    - "BitcoinSecret/Key as System.String"
+    - "Missing SecureString or byte[] for key material"
+    - "Key material in logging or exception messages"
+  patterns:
+    - "string\s+\w*(?:privateKey|secret|mnemonic|wif)"
+    - "\.ToString\(\).*private|ToString\(\).*secret"
+    - "Console\.WriteLine\(.*(?:privateKey|mnemonic)"
+confidence: medium
+severity_weight: 50
+fix:
+  1. Use SecureString for sensitive data
+  2. Use byte[] with Array.Clear() after use
+  3. NBitcoin: use BitcoinSecret.Network property not ToString()
+
+---
+rule_id: BLK-CS-003
+name: "Unsafe Deserialization (BinaryFormatter / JSON.NET)"
+severity: critical
+category: security
+tags: [csharp, dotnet, deserialization, rce]
+detection:
+  methods:
+    - "BinaryFormatter.Deserialize() (obsolete and dangerous)"
+    - "JsonConvert.DeserializeObject with TypeNameHandling.All"
+    - "NetDataContractSerializer without binder"
+  patterns:
+    - "BinaryFormatter.*\.Deserialize\("
+    - "TypeNameHandling\.(?:All|Objects|Arrays|Auto)"
+    - "NetDataContractSerializer\b(?!.*SerializationBinder)"
+confidence: critical
+severity_weight: 100
+fix:
+  1. BinaryFormatter is obsolete in .NET 8+ - replace with System.Text.Json
+  2. Use TypeNameHandling.None (default)
+  3. Implement SerializationBinder for custom deserialization
+known_exploits:
+  - "CVE-2023-33234: NBitcoin deserialization via BinaryFormatter"
+
+---
+rule_id: BLK-CS-004
+name: "Missing Certificate Validation for RPC"
+severity: high
+category: security
+tags: [csharp, dotnet, rpc, tls, mitm]
+detection:
+  methods:
+    - "ServicePointManager.ServerCertificateValidationCallback = delegate { return true; }"
+    - "HttpClientHandler.ServerCertificateCustomValidationCallback always true"
+    - "Missing RemoteCertificateValidationCallback implementation"
+  patterns:
+    - "ServerCertificateValidationCallback\s*=.*=>\s*true"
+    - "ServerCertificateCustomValidationCallback.*=>\s*true"
+    - "ServicePointManager.*CertificateValidation"
+confidence: high
+severity_weight: 70
+fix:
+  1. Use default certificate validation (validates chain)
+  2. Implement proper certificate pinning
+  3. Never return true in ServerCertificateValidationCallback
+
+---
+rule_id: BLK-CS-005
+name: "SQL Injection in Blockchain Indexer"
+severity: high
+category: security
+tags: [csharp, dotnet, sql, injection, indexer]
+detection:
+  methods:
+    - "String concatenation in SQL query"
+    - "SqlCommand with unsanitized user input"
+    - "Missing parameterized queries"
+  patterns:
+    - "\"SELECT.*\"\s*\+\s*\w+"
+    - "SqlCommand\(.*\+\s*\w+"
+    - "ExecuteScalar|ExecuteReader.*(?!.*SqlParameter)"
+confidence: high
+severity_weight: 70
+fix:
+  1. Always use parameterized queries (SqlParameter)
+  2. Use Entity Framework or Dapper with parameter binding
+  3. Never concatenate user input into SQL strings
+
+---
+rule_id: BLK-CS-006
+name: "Race Condition in Async Transaction Handling"
+severity: medium
+category: security
+tags: [csharp, dotnet, async, race-condition, concurrency]
+detection:
+  methods:
+    - "Shared balance/state without lock in async method"
+    - "ConfigureAwait(false) in transaction-critical code"
+    - "Multiple await without SynchronizationContext in wallet"
+  patterns:
+    - "async.*(?:SendTransaction|CreateOrder).*(?!.*(?:lock|SemaphoreSlim|Mutex))"
+    - "ConfigureAwait\(false\).*(?:balance|amount|fee)"
+confidence: medium
+severity_weight: 45
+fix:
+  1. Use SemaphoreSlim(1,1) for async mutual exclusion
+  2. Avoid ConfigureAwait(false) in UI/wallet code
+  3. Use Interlocked for atomic counter operations
+
+---
+## === Move / Sui / Aptos Rules ===
+
+rule_id: BLK-MOVE-001
+name: "Missing Ability Constraints (drop/store/copy/key)"
+severity: high
+category: security
+tags: [move, sui, aptos, resource, ability]
+detection:
+  methods:
+    - "Struct with `key` ability but no `store` (can't be transferred)"
+    - "Resource without `drop` ability (resource leak potential)"
+    - "Coin without `store` ability"
+  patterns:
+    - "struct \w+ has key(?!.*store)"
+    - "struct \w+ has (?!.*drop)"
+    - "public fun \w+\(.*\): \w+ acquires \w+"
+confidence: high
+severity_weight: 70
+fix:
+  1. Explicitly declare all required abilities
+  2. Key assets must have store ability for transfer
+  3. Use `drop` ability only when resource can be safely discarded
+known_exploits:
+  - "Resource leak attacks: creating non-droppable resources to bloat storage"
+
+---
+rule_id: BLK-MOVE-002
+name: "Unchecked Signer Authority"
+severity: critical
+category: security
+tags: [move, sui, aptos, signer, authority, access-control]
+detection:
+  methods:
+    - "Entry function without signer parameter check"
+    - "Privileged operation (mint/burn/withdraw) without signer validation"
+    - "Missing assert(signer == expected_address)"
+  patterns:
+    - "public entry fun (?:mint|burn|withdraw|freeze|pause|upgrade)(.*&signer(?!.*assert.*signer))"
+    - "public fun \w+\(.*&signer.*\)(?!.*assert|require)"
+    - "transfer::public_transfer\(.*signer"
+confidence: critical
+severity_weight: 100
+fix:
+  1. Always validate signer == expected admin address
+  2. Use assert!(signer::address_of(signer) == @admin, E_UNAUTHORIZED)
+  3. Use capability pattern instead of raw signer checks
+known_exploits:
+  - "Wormhole Sui bridge: missing signer validation (2022)"
+
+---
+rule_id: BLK-MOVE-003
+name: "Resource Lock / Freeze Without Escape Hatch"
+severity: high
+category: security
+tags: [move, sui, aptos, resource, freeze, dos]
+detection:
+  methods:
+    - "Freeze function without corresponding unfreeze"
+    - "Resource that can be locked permanently"
+    - "Missing admin unfreeze capability"
+  patterns:
+    - "public entry fun freeze(?!.*unfreeze|thaw)"
+    - "transfer::freeze_object(?!.*transfer::public_thaw)"
+    - "object::set_flag.*frozen(?!.*clear_flag)"
+confidence: high
+severity_weight: 70
+fix:
+  1. Always provide unfreeze/thaw capability for admin
+  2. Use timelock-based freeze with automatic expiry
+  3. Document freeze behavior for users
+
+---
+rule_id: BLK-MOVE-004
+name: "Integer Overflow in Coin Operations"
+severity: high
+category: security
+tags: [move, sui, aptos, coin, overflow, arithmetic]
+detection:
+  methods:
+    - "Balance arithmetic without overflow check"
+    - "Coin::merge without safe math"
+    - "Custom math functions without bounds validation"
+  patterns:
+    - "balance\s*=\s*balance\s*\+\s*\w+"
+    - "coin::merge\(.*coin::mint"
+    - "fun \w+\(.*u\d+.*\).*\+(?!.*assert)"
+confidence: high
+severity_weight: 70
+fix:
+  1. Move has built-in overflow protection for + and *
+  2. Use checked math patterns for custom operations
+  3. Always assert!(amount <= MAX_SUPPLY - balance)
+known_exploits:
+  - "Various SUI ecosystem tokens with manipulated supply via overflow"
+
+---
+rule_id: BLK-MOVE-005
+name: "Reentrancy via Cross-Module Call"
+severity: high
+category: security
+tags: [move, sui, aptos, reentrancy, cross-module]
+detection:
+  methods:
+    - "External module call after state modification"
+    - "Missing checks-effects-interactions pattern"
+    - "Dynamic dispatch without reentrancy guard"
+  patterns:
+    - "\w+::\w+\(.*\);(?!.*\w+::\w+\()"
+confidence: medium
+severity_weight: 65
+fix:
+  1. Follow checks-effects-interactions pattern
+  2. Update state before external calls
+  3. Use reentrancy guard pattern (bool flag)
+
+---
+rule_id: BLK-MOVE-006
+name: "Missing Abort Code / Silent Failure"
+severity: medium
+category: quality
+tags: [move, sui, aptos, error-handling, abort]
+detection:
+  methods:
+    - "abort with hardcoded code (should use named constants)"
+    - "assert with generic error not specific code"
+    - "Missing error handling for failed transfers"
+  patterns:
+    - "abort\s+0\b"
+    - "assert!\(.*,\s*0\)"
+    - "coin::transfer\(.*\);(?!.*assert|abort)"
+confidence: medium
+severity_weight: 40
+fix:
+  1. Define error constants: const E_UNAUTHORIZED: u64 = 1
+  2. Use descriptive abort codes
+  3. Handle transfer failures gracefully

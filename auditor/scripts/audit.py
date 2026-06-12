@@ -95,6 +95,12 @@ def scan_file(filepath, rules):
             lang_match = True
         elif ext in (".ts", ".tsx", ".js", ".jsx", ".mjs") and ("typescript" in tags or "javascript" in tags):
             lang_match = True
+        elif ext == ".java" and "java" in tags:
+            lang_match = True
+        elif ext == ".cs" and "csharp" in tags:
+            lang_match = True
+        elif ext == ".move" and "move" in tags:
+            lang_match = True
         elif "all" in tags:
             lang_match = True
         
@@ -194,10 +200,13 @@ def main():
     cpp_files = find_files(args.target, [".cpp", ".cc", ".cxx", ".h", ".hpp"])
     py_files = find_files(args.target, [".py"])
     ts_files = find_files(args.target, [".ts", ".tsx", ".js", ".jsx", ".mjs"])
+    java_files = find_files(args.target, [".java"])
+    cs_files = find_files(args.target, [".cs"])
+    move_files = find_files(args.target, [".move"])
     config_files = find_files(args.target, [".env", ".env.example", ".yml", ".yaml", ".toml", ".json"])
     
-    all_files = sol_files + rs_files + go_files + cpp_files + py_files + ts_files + config_files
-    print(f"Found {len(sol_files)} Solidity, {len(rs_files)} Rust, {len(go_files)} Go, {len(cpp_files)} C/C++, {len(py_files)} Python, {len(ts_files)} TS/JS, {len(config_files)} config files")
+    all_files = sol_files + rs_files + go_files + cpp_files + py_files + ts_files + java_files + cs_files + move_files + config_files
+    print(f"Found {len(sol_files)} Solidity, {len(rs_files)} Rust, {len(go_files)} Go, {len(cpp_files)} C/C++, {len(py_files)} Python, {len(ts_files)} TS/JS, {len(java_files)} Java, {len(cs_files)} C#, {len(move_files)} Move, {len(config_files)} config files")
     
     # Scan all files
     all_findings = []
