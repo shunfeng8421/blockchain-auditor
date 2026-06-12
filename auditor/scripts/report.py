@@ -11,8 +11,12 @@ def main():
     parser.add_argument("--output", default="auditor/logs/audit_report.md")
     args = parser.parse_args()
     
-    findings_file = os.path.join(args.findings, "findings.jsonl")
-    summary_file = os.path.join(args.findings, "findings_summary.json")
+    # Find latest findings files
+    import glob
+    finding_files = sorted(glob.glob(os.path.join(args.findings, "*_findings.jsonl")))
+    summary_files = sorted(glob.glob(os.path.join(args.findings, "*_summary.json")))
+    findings_file = finding_files[-1] if finding_files else os.path.join(args.findings, "findings.jsonl")
+    summary_file = summary_files[-1] if summary_files else os.path.join(args.findings, "findings_summary.json")
     
     if not os.path.exists(summary_file):
         print("No findings to report")
