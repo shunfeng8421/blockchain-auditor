@@ -219,7 +219,7 @@ def main():
     
     # Write findings
     os.makedirs(args.output, exist_ok=True)
-        repo_name = os.path.basename(args.target.rstrip("/"))
+    repo_name = os.path.basename(args.target.rstrip("/"))
     findings_file = os.path.join(args.output, f"{repo_name}_findings.jsonl")
     summary_file = os.path.join(args.output, f"{repo_name}_summary.json")
     
