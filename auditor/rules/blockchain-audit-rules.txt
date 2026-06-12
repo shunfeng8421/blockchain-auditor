@@ -511,3 +511,157 @@ fix:
   1. Use OpenZeppelin standard implementations
   2. transfer must return bool
   3. approve must zero-out before setting new value
+
+## === Python / Crypto Trading Bot Rules ===
+
+rule_id: BLK-PY-001
+name: "Exchange API Key / Secret Exposure"
+severity: critical
+category: security
+tags: [python, exchange, api-key, credentials]
+detection:
+  methods:
+    - "API keys/secrets in source code or config files"
+    - "Secrets logged via print/logging statements"
+    - "Config files committed with real credentials"
+  patterns:
+    - "(api_key|api_secret|secret_key|exchange_key)\s*=\s*[\"']\w+[\"']"
+    - "\.(key|secret)\s*=\s*[\"'][\w-]{10,}[\"']"
+    - "logger\.(debug|info)\(.*secret|logger\.(debug|info)\(.*key"
+confidence: critical
+severity_weight: 100
+fix:
+  1. Use environment variables or vault for secrets
+  2. .gitignore all config files with credentials
+  3. Never log API keys/secrets; mask them in log output
+
+---
+rule_id: BLK-PY-002
+name: "Unvalidated Order Quantity / Price"
+severity: high
+category: security
+tags: [python, trading, order-validation, input-sanity]
+detection:
+  methods:
+    - "Order amount/price from user without bounds check"
+    - "Missing min/max quantity validation before exchange call"
+    - "Price from ticker used directly without sanity check"
+  patterns:
+    - "create_order\(.*amount\s*="
+    - "create_limit_order\(.*price\s*="
+    - "amount\s*=\s*float\(.*\)(?!.*\bif\b)"
+confidence: high
+severity_weight: 70
+fix:
+  1. Validate amount > exchange minimum and < exchange maximum
+  2. Validate price within N% of current market price
+  3. Use Decimal not float for financial calculations
+known_exploits:
+  - "Fat-finger orders consuming entire balance"
+  - "Price manipulation causing bad fills in illiquid markets"
+
+---
+rule_id: BLK-PY-003
+name: "Race Condition in Order Execution"
+severity: high
+category: security
+tags: [python, trading, async, race-condition, concurrency]
+detection:
+  methods:
+    - "Shared balance/position tracking without asyncio.Lock"
+    - "Multiple coroutines accessing same exchange account concurrently"
+    - "Missing order confirmation before balance update"
+  patterns:
+    - "async def.*buy|async def.*sell|async def.*order"
+    - "self\.(balance|position|capital)\s*[-+]="
+confidence: medium
+severity_weight: 60
+fix:
+  1. Use asyncio.Lock for balance/position mutations
+  2. Always confirm order status before updating tracked balance
+  3. Use exchange.fetch_balance() as source of truth
+
+---
+rule_id: BLK-PY-004
+name: "Unsafe Dynamic Code Execution"
+severity: critical
+category: security
+tags: [python, injection, eval, exec, strategy]
+detection:
+  methods:
+    - "eval/exec on user-provided strategy code"
+    - "compile() with external input"
+    - "importlib loading user Python files without sandboxing"
+  patterns:
+    - "\beval\(|\bexec\(|\bcompile\(.*\b(mode|source)"
+    - "__import__\s*\(|importlib\.(import_module|load_module)"
+confidence: high
+severity_weight: 100
+fix:
+  1. Never eval() user input
+  2. Sandbox strategy execution in subprocess
+  3. Use RestrictedPython or similar for user strategies
+
+---
+rule_id: BLK-PY-005
+name: "Missing Exchange Rate Limiting"
+severity: medium
+category: quality
+tags: [python, exchange, rate-limit, reliability]
+detection:
+  methods:
+    - "Exchange API calls without rate limit handling"
+    - "Missing retry-after header processing"
+    - "No exponential backoff on 429 responses"
+  patterns:
+    - "ccxt|exchange\.(fetch|create|cancel).*(?!.*rate.?limit|retry|backoff|sleep)"
+confidence: medium
+severity_weight: 40
+fix:
+  1. Implement proper rate limit handling per exchange
+  2. Use exchange's built-in rateLimiter
+  3. Add jitter to avoid thundering herd on reconnect
+
+---
+rule_id: BLK-PY-006
+name: "Float Precision Loss in Financial Calculations"
+severity: high
+category: security
+tags: [python, trading, precision, float, decimal]
+detection:
+  methods:
+    - "Using float for financial amounts instead of Decimal"
+    - "Price * quantity using native float multiplication"
+    - "Rounding errors accumulating in PnL calculation"
+  patterns:
+    - "float\(.*(?:amount|price|cost|fee|profit|balance)"
+    - "(?:amount|price|cost|profit)\s*=\s*\d+\.\d*\s*[\*\/]"
+confidence: high
+severity_weight: 60
+fix:
+  1. Use decimal.Decimal for all financial calculations
+  2. Truncate to exchange precision after each operation
+  3. Never use float for currency amounts
+
+---
+rule_id: BLK-PY-007
+name: "Missing Position / Risk Sanity Checks"
+severity: high
+category: security
+tags: [python, trading, risk-management, position-sizing]
+detection:
+  methods:
+    - "No max position size check before order"
+    - "Missing stop-loss in automated strategies"
+    - "Unlimited leverage or margin usage"
+  patterns:
+    - "(?:create_order|create_market_buy_order).*(?!.*(?:stop_loss|max_position|risk|exposure))"
+confidence: high
+severity_weight: 70
+fix:
+  1. Always enforce max position size per symbol
+  2. Every automated trade must have stop-loss
+  3. Cap total exposure across all positions
+known_exploits:
+  - "3AC-style over-leverage collapse"
+  - "Luna/UST death spiral from uncapped exposure"

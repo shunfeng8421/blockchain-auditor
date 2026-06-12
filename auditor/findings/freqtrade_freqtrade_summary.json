@@ -1,0 +1,18 @@
+{
+  "target": "freqtrade/freqtrade",
+  "timestamp": "2026-06-12T15:57:13.657353+00:00",
+  "total_files_scanned": 513,
+  "total_findings": 7,
+  "by_severity": {
+    "critical": 0,
+    "high": 3,
+    "medium": 2,
+    "low": 2
+  },
+  "by_language": {
+    "python": 7,
+    "config": 0
+  },
+  "audit_method": "automated_pattern_scan + manual_deep_scan",
+  "notes": "freqtrade is a well-architected trading bot. Strategy sandboxing is the primary architectural concern. Float precision and Telegram RPC surface are real but manageable."
+}

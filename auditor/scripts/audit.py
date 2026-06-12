@@ -91,6 +91,8 @@ def scan_file(filepath, rules):
             lang_match = True
         elif ext in (".cpp", ".cc", ".cxx", ".h", ".hpp") and "cpp" in tags:
             lang_match = True
+        elif ext == ".py" and "python" in tags:
+            lang_match = True
         elif "all" in tags:
             lang_match = True
         
@@ -188,10 +190,11 @@ def main():
     rs_files = find_files(args.target, [".rs"])
     go_files = find_files(args.target, [".go"])
     cpp_files = find_files(args.target, [".cpp", ".cc", ".cxx", ".h", ".hpp"])
+    py_files = find_files(args.target, [".py"])
     config_files = find_files(args.target, [".env", ".env.example", ".yml", ".yaml", ".toml", ".json"])
     
-    all_files = sol_files + rs_files + go_files + cpp_files + config_files
-    print(f"Found {len(sol_files)} Solidity, {len(rs_files)} Rust, {len(go_files)} Go, {len(cpp_files)} C/C++, {len(config_files)} config files")
+    all_files = sol_files + rs_files + go_files + cpp_files + py_files + config_files
+    print(f"Found {len(sol_files)} Solidity, {len(rs_files)} Rust, {len(go_files)} Go, {len(cpp_files)} C/C++, {len(py_files)} Python, {len(config_files)} config files")
     
     # Scan all files
     all_findings = []
