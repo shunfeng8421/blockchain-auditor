@@ -1,7 +1,7 @@
 name: "Track PR Status"
 on:
   schedule:
-    - cron: "0 */4 * * *"  # Every 4 hours
+    - cron: "0 */4 * * *"
   workflow_dispatch:
 
 permissions:
@@ -24,25 +24,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python auditor/scripts/track_prs.py \
-            --tracking auditor/logs/pr_tracking.jsonl \
-            --output auditor/logs/pr_status.jsonl \
-            --log auditor/logs/events.jsonl
+          python auditor/scripts/track_prs.py             --tracking auditor/logs/pr_tracking.jsonl             --output auditor/logs/pr_status.jsonl             --log auditor/logs/events.jsonl
       - name: Commit tracking update
         run: |
           git config user.name "blockchain-auditor[bot]"
           git config user.email "blockchain-auditor[bot]@users.noreply.github.com"
+          for i in 1 2 3; do
+            git pull --rebase origin main && break || sleep 3
+          done
           git add auditor/logs/
-          git diff --staged --quiet || (
-            git pull --rebase origin main && 
-            git commit -m "[bot] track: PR status update #${{ github.run_number }}" && 
-            git push
-          )
+          git diff --staged --quiet || (git commit -m "[bot] track: PR status update #${{ github.run_number }}" && git push)
       - name: Auto-label case-study-ready
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python auditor/scripts/auto_label_merged.py \
-            --tracking auditor/logs/pr_status.jsonl \
-            --label "case-study-ready"
+          python auditor/scripts/auto_label_merged.py             --tracking auditor/logs/pr_status.jsonl             --label "case-study-ready"
