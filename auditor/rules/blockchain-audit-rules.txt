@@ -1356,3 +1356,303 @@ fix:
   1. Define error constants: const E_UNAUTHORIZED: u64 = 1
   2. Use descriptive abort codes
   3. Handle transfer failures gracefully
+
+|---
+rule_id: BLK-SOL-023
+name: "Timing Attack (block.timestamp manipulation)"
+severity: medium
+category: security
+swc_id: SWC-116
+cwe_id: CWE-682
+tags: [solidity, evm, timing, timestamp]
+detection:
+  methods:
+    - "Critical logic depends on block.timestamp"
+    - "Miner can manipulate timestamp +/-15 seconds"
+    - "Time-based reward distribution without safety margin"
+  patterns:
+    - "require\(.*block\.timestamp\s*[><=!]+\s*\d+.*\)"
+    - "if\s*\(.*block\.timestamp\s*[><=!]+\s*\w+.*\)"
+    - "block\.timestamp\s*[><=!]+\s*[a-zA-Z]"
+confidence: medium
+severity_weight: 40
+fix:
+  1. Use block.number instead of block.timestamp for time-critical logic
+  2. Accept +/-15 second deviation in time checks
+  3. Add safety margin for reward calculations
+known_exploits:
+  - "Governance voting timing manipulation"
+  - "MEV bots exploiting timestamp-dependent rewards"
+
+|---
+rule_id: BLK-SOL-024
+name: "Storage Collision (Proxy Pattern)"
+severity: critical
+category: security
+swc_id: SWC-124
+cwe_id: CWE-668
+tags: [solidity, evm, proxy, upgrade, storage]
+detection:
+  methods:
+    - "Implementation contract inherits from multiple contracts without __gap"
+    - "Missing __gap array in upgradeable contracts"
+    - "initialize() without onlyInitializing modifier"
+  patterns:
+    - "contract\s+\w+\s+is\s+\w+,\s*Initializable"
+    - "function\s+initialize\s*\([^)]*\)\s*(public|external)\s*(?!onlyInitializing)"
+    - "UUPS|UUPSUpgradeable"
+confidence: high
+severity_weight: 100
+fix:
+  1. Add __gap[50] array at end of every upgradeable contract
+  2. Use onlyInitializing modifier on initialize()
+  3. Inherit from OpenZeppelin Upgradeable contracts
+known_exploits:
+  - "Proxy storage collision in custom upgradeable contracts"
+  - "Yearn V3 uninitialized implementation vulnerability"
+
+|---
+rule_id: BLK-SOL-025
+name: "Uninitialized Implementation Contract"
+severity: critical
+category: security
+swc_id: SWC-106
+cwe_id: CWE-665
+tags: [solidity, evm, proxy, initialize, implementation]
+detection:
+  methods:
+    - "Implementation contract deployable without initialization"
+    - "Selfdestruct available in uninitialized implementation"
+  patterns:
+    - "function\s+initialize\s*\([^)]*\)\s*(public|external)\s*\{"
+    - "initializer\s*\{"
+    - "function\s+__\w+_init\s*\("
+confidence: high
+severity_weight: 100
+fix:
+  1. Add initializer modifier from OpenZeppelin
+  2. Use onlyInitializing for internal init functions
+  3. Consider adding constructor to lock implementation
+known_exploits:
+  - "Yearn V3 (2023): uninitialized implementation contract"
+  - "Multiple DeFi protocols with selfdestruct in implementation"
+
+|---
+rule_id: BLK-SOL-026
+name: "Cross-protocol Composability Attack"
+severity: critical
+category: security
+swc_id: SWC-113
+cwe_id: CWE-841
+tags: [solidity, evm, defi, composability, flashloan]
+detection:
+  methods:
+    - "Flash loan callback without reentrancy guard"
+    - "Cross-protocol state inconsistency"
+    - "Unbounded approve/transferFrom chain"
+  patterns:
+    - "flashLoan|flash_loan|flashloan"
+    - "safeTransferFrom.*address\(this\)"
+    - "approve\(.*,\s*type\(uint256\)\.max"
+    - "callback|onTokenTransfer|tokensReceived"
+confidence: medium
+severity_weight: 100
+fix:
+  1. Use ReentrancyGuard on all external entry points
+  2. Validate state consistency after cross-protocol calls
+  3. Limit approve amounts to exact needed values
+known_exploits:
+  - "Euler Finance (2023, $197M)"
+  - "Cream Finance (2021, $130M)"
+  - "Multichain cross-chain bridge"
+
+|---
+rule_id: BLK-SOL-027
+name: "Token Contract Non-Standard Behavior"
+severity: high
+category: security
+swc_id: SWC-122
+cwe_id: CWE-682
+tags: [solidity, evm, token, erc20, fee-on-transfer]
+detection:
+  methods:
+    - "Custom _beforeTokenTransfer/_afterTokenTransfer hooks"
+    - "Fee-on-transfer, rebasing, or blacklist mechanics"
+    - "Balance manipulation in transfer functions"
+  patterns:
+    - "_beforeTokenTransfer|_afterTokenTransfer"
+    - "balanceOf\s*\(.*\)\s*[-+]"
+    - "taxAmount|feeAmount|reflectFee|takeFee"
+    - "excludeFromFee|includeInFee"
+confidence: high
+severity_weight: 70
+fix:
+  1. Use balanceOf after transfer to get actual received amount
+  2. Do not assume transfer(from, to, amount) transfers exact amount
+  3. Document all non-standard token behaviors
+known_exploits:
+  - "Fee-on-transfer tokens causing protocol accounting errors"
+  - "Rebasing tokens breaking vault share calculations"
+
+|---
+rule_id: BLK-SOL-028
+name: "Liquidity Pool Initialization & Migration"
+severity: high
+category: security
+swc_id: SWC-105
+cwe_id: CWE-284
+tags: [solidity, evm, defi, pool, liquidity]
+detection:
+  methods:
+    - "Pool initialization without access control"
+    - "Pool migration without state validation"
+    - "Fee collection without permission check"
+  patterns:
+    - "function\s+initialize\s*\([^)]*address\s+token[^)]*\)"
+    - "migrate\s*\(|migration\s*\("
+    - "collectProtocolFee|claimFee|withdrawFee"
+    - "poolCreated|createPool|addLiquidity"
+confidence: medium
+severity_weight: 70
+fix:
+  1. Restrict pool creation to authorized addresses
+  2. Validate old pool state before migration
+  3. Fee extraction must have access control
+known_exploits:
+  - "Uninitialized pools with attacker-controlled parameters"
+  - "Pool migration leaving stale state exploitable"
+
+|---
+rule_id: BLK-SOL-029
+name: "Social Engineering via Ownership Transfer"
+severity: high
+category: security
+swc_id: SWC-105
+cwe_id: CWE-284
+tags: [solidity, evm, access-control, ownership]
+detection:
+  methods:
+    - "Single-step ownership transfer"
+    - "Proxy admin change without two-step confirmation"
+    - "UpgradeTo function without timelock"
+  patterns:
+    - "transferOwnership|renounceOwnership"
+    - "changeAdmin|changeProxyAdmin"
+    - "upgradeTo|upgradeToAndCall"
+    - "function\s+set\w+\s*\([^)]*address\s+\w+\)\s*(public|external)\s*$"
+confidence: high
+severity_weight: 70
+fix:
+  1. Use Ownable2Step for two-step ownership transfer
+  2. Add timelock to proxy admin operations
+  3. Proxy admin must be a multisig
+known_exploits:
+  - "Ronin bridge ($620M, private key compromise)"
+  - "Various proxy admin social engineering attacks"
+
+|---
+rule_id: BLK-SOL-030
+name: "Incentive Misalignment in Reward Distribution"
+severity: medium
+category: economic
+swc_id: SWC-120
+cwe_id: CWE-841
+tags: [solidity, evm, defi, rewards, staking]
+detection:
+  methods:
+    - "Reward calculation based on TVL without time-weighting"
+    - "Flash-loanable reward claiming"
+    - "Voting weight manipulable via temporary balance"
+  patterns:
+    - "rewardPerToken|rewardRate|rewardPerSecond"
+    - "getReward|claimReward|harvest"
+    - "weight\s*=\s*[a-zA-Z]+\s*\.\s*balanceOf"
+    - "allocate|distribute|proportion"
+confidence: medium
+severity_weight: 50
+fix:
+  1. Weight rewards by time-locked balance, not spot balance
+  2. Add minimum lock period for reward eligibility
+  3. Use checkpoint-based balance tracking
+known_exploits:
+  - "Convex reward manipulation via flash loans"
+  - "Curve voting weight manipulation"
+
+|---
+rule_id: BLK-SOL-031
+name: "Cross-chain Wormhole Bridge Verification"
+severity: critical
+category: security
+swc_id: SWC-113
+cwe_id: CWE-345
+tags: [solidity, evm, bridge, wormhole, cross-chain]
+detection:
+  methods:
+    - "Insufficient cross-chain message verification"
+    - "Missing replay protection on bridge messages"
+    - "Single validator signature verification"
+  patterns:
+    - "verifySignature|verifyMessage|parseAndVerifyVM"
+    - "wormhole|Wormhole|WORMHOLE"
+    - "completeTransfer|completeTransferWithPayload"
+confidence: medium
+severity_weight: 100
+fix:
+  1. Verify multisig signatures on all cross-chain messages
+  2. Add nonce-based replay protection
+  3. Validate source chain ID in message
+known_exploits:
+  - "Wormhole (2022, $326M)"
+  - "Nomad bridge (2022, $190M)"
+
+|---
+rule_id: BLK-SOL-032
+name: "Composability Callback Injection"
+severity: high
+category: security
+swc_id: SWC-113
+cwe_id: CWE-841
+tags: [solidity, evm, defi, callback, composability]
+detection:
+  methods:
+    - "External call to user-supplied address in callback"
+    - "Unsafe low-level call with user-controlled data"
+    - "Missing reentrancy guard on callback entry points"
+  patterns:
+    - "safeTransferFrom.*address\(this\)"
+    - "approve\(.*,\s*type\(uint256\)\.max"
+    - "callback|onTokenTransfer|tokensReceived"
+    - "function\s+[a-zA-Z]+\s*\([^)]*address\s+[a-zA-Z]+[^)]*\)\s*(public|external)\s*\{[^}]*call\s*\("
+confidence: medium
+severity_weight: 70
+fix:
+  1. Use ReentrancyGuard on all callback-receiving functions
+  2. Validate caller address in callbacks
+  3. Limit approve to exact amounts, not type(uint256).max
+known_exploits:
+  - "ERC777 callback reentrancy (imBTC, Uniswap)"
+  - "Various cross-protocol flash loan attacks"
+
+|---
+rule_id: BLK-SOL-033
+name: "Ponzi Scheme Detection"
+severity: low
+category: quality
+tags: [solidity, evm, ponzi, scam]
+detection:
+  methods:
+    - "High guaranteed returns"
+    - "Referral/matrix/level-based rewards"
+    - "Auto-compounding with unsustainable yield"
+  patterns:
+    - "referral|referrer|referralBonus|referralReward"
+    - "level\w*|tier\w*|matrix\w*"
+    - "dailyReturn|dailyProfit|guaranteed"
+    - "compound|reinvest"
+confidence: low
+severity_weight: 10
+fix:
+  N/A - Design-level concern, requires manual review
+known_exploits:
+  - "Forsage ($340M)"
+  - "Various DeFi pyramid schemes"
