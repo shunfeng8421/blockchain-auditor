@@ -29,6 +29,10 @@ FP_EXCLUSIONS = {
     "BLK-SOL-029": lambda c: bool(re.search(r'checkAccess\b|onlyOwner\b|onlyRole\b|Ownable2Step\b', c)),
     "BLK-SOL-032": lambda c: bool(re.search(r'forceApprove\b|SafeERC20\b|ReentrancyGuard|nonReentrant', c)),
     "BLK-SOL-033": lambda c: bool(re.search(r'///\s*@notice|interface\s+\w+|@title|@dev\s', c)),
+    # V2 新增规则 FP 排除 (2026-08-05)
+    "BLK-SOL-034": lambda c: bool(re.search(r'openzeppelin|OpenZeppelin|IERC20|IUniswap|onlyInitializing', c, re.IGNORECASE)) or (not bool(re.search(r'positionMultiplier|issueSetForExactToken|issueExactSetFromToken', c))),
+    "BLK-SOL-035": lambda c: bool(re.search(r'openzeppelin|OpenZeppelin|onlyInitializing', c, re.IGNORECASE)) or (not bool(re.search(r'permit\s*\([^)]*\)|ecrecover\s*\(', c))),
+    "BLK-SOL-036": lambda c: bool(re.search(r'openzeppelin|OpenZeppelin|onlyInitializing', c, re.IGNORECASE)) or (not bool(re.search(r'totalAssets|convertToShares|convertToAssets', c))),
 }
 
 def scan_file_optimized(filepath, rules):

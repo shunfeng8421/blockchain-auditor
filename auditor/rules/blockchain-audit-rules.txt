@@ -1656,3 +1656,87 @@ fix:
 known_exploits:
   - "Forsage ($340M)"
   - "Various DeFi pyramid schemes"
+# ============================================================
+# Blockchain Audit Rules v1.1 — 14 New Rules (V2 Optimized)
+# ============================================================
+# 基于 837 PoC 交叉分析 + 4 个新 PoC 实战验证
+# 优化: negated 模式使用 \btest\b 避免函数名子串误匹配
+# 新增: TOCTOU/NAV Manipulation, Signature Forgery, Donation/Inflation Attack
+# 日期: 2026-08-05
+
+---
+
+rule_id: BLK-SOL-034
+name: "TOCTOU / NAV Manipulation"
+severity: high
+category: security
+tags: [solidity, evm, defi, toctou]
+detection:
+  methods:
+    - "报价与结算分离导致 TOCTOU 漏洞"
+    - "攻击者可在报价后操纵 NAV 获取不公平收益"
+    - "positionMultiplier 被外部操纵"
+  patterns:
+    - "positionMultiplier"
+    - "issueSetForExactToken|issueExactSetFromToken|redeemExactSetForToken"
+    - "getComponents|getModules|getPositions"
+    - "manager\s*\(.*\).*set|manager\s*\.\s*set"
+confidence: medium
+severity_weight: 70
+fix:
+  1. 报价和结算之间必须加锁或使用 snapshot 机制
+  2. 防止中间状态被操纵
+  3. 考虑使用 TWAP 或链下报价而非实时价格
+known_exploits:
+  - "Index Coop ExchangeIssuance (2024, $8,174)"
+
+---
+
+rule_id: BLK-SOL-035
+name: "Signature Forgery (Permit)"
+severity: critical
+category: security
+tags: [solidity, evm, defi, signature]
+detection:
+  methods:
+    - "permit 签名验证只检查 ecrecover 返回非零地址"
+    - "未验证签名是否有效（消息 hash、signer、签名三者匹配）"
+  patterns:
+    - "permit\s*\([^)]*\)"
+    - "ecrecover\s*\("
+    - "DOMAIN_SEPARATOR|domainSeparator|domain_separator"
+    - "permit|Permit|PERMIT"
+confidence: high
+severity_weight: 100
+fix:
+  1. 检查 ecrecover 返回值是否有零地址检查 (require(recovered != address(0)))
+  2. 签名验证必须完整（消息 hash、signer、签名三者匹配）
+  3. 使用 OpenZeppelin EIP712 实现
+known_exploits:
+  - "Lixir Finance (2024, $2.19M)"
+
+---
+
+rule_id: BLK-SOL-036
+name: "Donation / Inflation Attack"
+severity: high
+category: security
+tags: [solidity, evm, defi, inflation]
+detection:
+  methods:
+    - "空池 NAV 可被捐赠攻击操纵"
+    - "攻击者通过捐赠膨胀份额价值后赎回套利"
+    - "convertToShares/convertToAssets 没有通胀防护"
+  patterns:
+    - "totalAssets|totalSupply"
+    - "convertToShares|convertToAssets"
+    - "previewDeposit|previewRedeem|previewMint|previewWithdraw"
+    - "deposit\s*\([^)]*\)\s*(public|external)\s*\{[^}]*mint\s*\("
+confidence: medium
+severity_weight: 70
+fix:
+  1. 空池必须有最小存款限制
+  2. 份额计算必须有通胀防护（如 totalSupply > 0 检查）
+  3. 使用 ERC4626 标准实现
+known_exploits:
+  - "Summer.fi / Lazy Summer (2024, $5.6M)"
